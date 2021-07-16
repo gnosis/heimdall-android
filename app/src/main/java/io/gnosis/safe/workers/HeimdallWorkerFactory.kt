@@ -7,11 +7,13 @@ import androidx.work.WorkerParameters
 import io.gnosis.data.repositories.ChainInfoRepository
 import io.gnosis.data.repositories.SafeRepository
 import io.gnosis.safe.Tracker
+import io.gnosis.safe.notifications.NotificationRepository
 import javax.inject.Inject
 
 class HeimdallWorkerFactory @Inject constructor(
     private val safeRepository: SafeRepository,
     private val chainInfoRepository: ChainInfoRepository,
+    private val notificationRepository: NotificationRepository,
     private val tracker: Tracker
 ) : WorkerFactory() {
 
@@ -21,6 +23,12 @@ class HeimdallWorkerFactory @Inject constructor(
             UpdateChainInfoWorker::class.java.name -> UpdateChainInfoWorker(
                 safeRepository,
                 chainInfoRepository,
+                tracker,
+                appContext,
+                workerParameters
+            )
+            NotificationsRegistrationWorker::class.java.name -> NotificationsRegistrationWorker(
+                notificationRepository,
                 tracker,
                 appContext,
                 workerParameters

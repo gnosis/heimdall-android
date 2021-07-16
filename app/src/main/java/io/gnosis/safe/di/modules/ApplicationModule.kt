@@ -322,12 +322,13 @@ class ApplicationModule(private val application: Application) {
         @ApplicationContext context: Context,
         safeRepository: SafeRepository,
         chainInfoRepository: ChainInfoRepository,
+        notificationRepository: NotificationRepository,
         tracker: Tracker
     ): WorkManager {
         WorkManager.initialize(
             context,
             androidx.work.Configuration.Builder()
-                .setWorkerFactory(HeimdallWorkerFactory(safeRepository, chainInfoRepository, tracker))
+                .setWorkerFactory(HeimdallWorkerFactory(safeRepository, chainInfoRepository, notificationRepository, tracker))
                 .build()
         )
         return WorkManager.getInstance(context)

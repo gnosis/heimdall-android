@@ -159,7 +159,7 @@ class NotificationManager(
         }
 
         val resId = subChannelForPushNotificationSubType(pushNotification).resId
-        val channelId = safe.address.asEthereumAddressChecksumString() + "." + context.getString(resId)
+        val channelId = safe.notificationChannelId() + "." + context.getString(resId)
 
         return builder(title, text, channelId, intent)
     }

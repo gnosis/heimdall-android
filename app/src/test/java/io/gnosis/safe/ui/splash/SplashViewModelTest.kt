@@ -125,7 +125,8 @@ class SplashViewModelTest {
     @Test
     fun `onAppStart should register notification service and set user properties`() = runBlockingTest {
 
-        coEvery { notificationRepository.register() } just Runs
+        coEvery { workRepository.registerForPushNotifications() } just Runs
+        coEvery { workRepository.updateChainInfo() } just Runs
         coEvery { notificationRepository.clearNotifications() } just Runs
         coEvery { notificationRepository.checkPermissions() } returns true
         coEvery { tracker.setPushInfo(any()) } just Runs
@@ -133,7 +134,6 @@ class SplashViewModelTest {
         coEvery { tracker.setNumKeysImported(any()) } just Runs
         coEvery { tracker.setNumKeysGenerated(any()) } just Runs
         coEvery { safeRepository.getSafeCount() } returns 0
-        coEvery { workRepository.updateChainInfo() } just Runs
         coEvery { ownerCredentialsRepository.ownerCount(Owner.Type.IMPORTED) } returns 1
         coEvery { ownerCredentialsRepository.ownerCount(Owner.Type.GENERATED) } returns 0
 
@@ -143,7 +143,8 @@ class SplashViewModelTest {
         viewModel.onAppStart()
 
         coVerifySequence {
-            notificationRepository.register()
+            workRepository.registerForPushNotifications()
+            workRepository.updateChainInfo()
             notificationRepository.clearNotifications()
             notificationRepository.checkPermissions()
             tracker.setPushInfo(true)
@@ -158,6 +159,8 @@ class SplashViewModelTest {
     @Test
     fun `onAppStart (no credentials in repository) should track 0 num_keys_imported`() = runBlockingTest {
 
+        coEvery { workRepository.registerForPushNotifications() } just Runs
+        coEvery { workRepository.updateChainInfo() } just Runs
         coEvery { notificationRepository.register() } just Runs
         coEvery { notificationRepository.clearNotifications() } just Runs
         coEvery { notificationRepository.checkPermissions() } returns true
@@ -166,7 +169,6 @@ class SplashViewModelTest {
         coEvery { tracker.setNumKeysImported(any()) } just Runs
         coEvery { tracker.setNumKeysGenerated(any()) } just Runs
         coEvery { safeRepository.getSafeCount() } returns 0
-        coEvery { workRepository.updateChainInfo() } just Runs
         coEvery { ownerCredentialsRepository.ownerCount(any()) } returns 0
 
         val viewModel =
@@ -175,7 +177,8 @@ class SplashViewModelTest {
         viewModel.onAppStart()
 
         coVerifySequence {
-            notificationRepository.register()
+            workRepository.registerForPushNotifications()
+            workRepository.updateChainInfo()
             notificationRepository.clearNotifications()
             notificationRepository.checkPermissions()
             tracker.setPushInfo(true)

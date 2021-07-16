@@ -1,5 +1,6 @@
 package io.gnosis.safe.notifications
 
+import io.gnosis.data.models.Chain
 import io.gnosis.safe.notifications.models.Registration
 import io.gnosis.safe.utils.MnemonicKeyAndAddressDerivator
 import io.mockk.mockk
@@ -16,18 +17,19 @@ class RegistrationTest {
     @Test
     fun testHash() {
 
+        val  safes = listOf(SAFE_1, SAFE_2)
+
         val registration = Registration(
             uuid = UUID,
-            safes = listOf(SAFE_1, SAFE_2),
             cloudMessagingToken = CLOUD_MESSAGING_TOKEN,
-            bundle = BUNDLE,
-            version = VERSION,
-            deviceType = DEVICE_TYPE,
             buildNumber = BUILD_NUMBER,
+            bundle = BUNDLE,
+            deviceType = DEVICE_TYPE,
+            version = VERSION,
             timestamp = TIMESTAMP
         )
 
-        assertEquals("0xc1faf614797d0ab4bb011163bf5166c3694f19042b260427b69ba9c69a4076e5", registration.hash())
+        assertEquals("0xc1faf614797d0ab4bb011163bf5166c3694f19042b260427b69ba9c69a4076e5", registration.hashForSafes(safes))
     }
 
     @Test
@@ -41,24 +43,32 @@ class RegistrationTest {
 
         assertEquals("0x8Cd8D40103B500fc80bb2D1709bB8b23C8BdaF87", address.asEthereumAddressChecksumString())
 
+        val  safes = listOf(SAFE_1, SAFE_2)
+
         val registration = Registration(
             uuid = UUID,
-            safes = listOf(SAFE_1, SAFE_2),
             cloudMessagingToken = CLOUD_MESSAGING_TOKEN,
-            bundle = BUNDLE,
-            version = VERSION,
-            deviceType = DEVICE_TYPE,
             buildNumber = BUILD_NUMBER,
+            bundle = BUNDLE,
+            deviceType = DEVICE_TYPE,
+            version = VERSION,
             timestamp = TIMESTAMP
         )
 
-        assertEquals("0xc1faf614797d0ab4bb011163bf5166c3694f19042b260427b69ba9c69a4076e5", registration.hash())
+        val registrationHashForChain = registration.hashForSafes(safes)
 
-        registration.buildAndAddSignature(key.toByteArray())
+        assertEquals("0xc1faf614797d0ab4bb011163bf5166c3694f19042b260427b69ba9c69a4076e5", registrationHashForChain)
+
+        val chainRegistrationData = Registration.ChainData(
+            Chain.ID_MAINNET.toString(),
+            safes
+        )
+
+        chainRegistrationData.buildAndAddSignature(registrationHashForChain, key.toByteArray())
 
         assertEquals(
             "0x77a687a3e0021202c4d542a6aeccdb0a22bdcb722892d3a5082334d2c72468771a1e7aa303925a0115a09789c36a2a1e7bb5feb212bbd4db7c9f0c1ab01739291b",
-            registration.signatures[0]
+            chainRegistrationData.signatures[0]
         )
     }
 

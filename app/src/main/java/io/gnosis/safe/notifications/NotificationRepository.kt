@@ -6,13 +6,11 @@ import io.gnosis.data.models.Owner
 import io.gnosis.data.models.Safe
 import io.gnosis.data.repositories.CredentialsRepository
 import io.gnosis.data.repositories.SafeRepository
-import io.gnosis.data.utils.toSignatureString
 import io.gnosis.safe.BuildConfig
 import io.gnosis.safe.Error
 import io.gnosis.safe.notifications.models.PushNotification
 import io.gnosis.safe.notifications.models.Registration
 import io.gnosis.safe.toError
-import pm.gnosis.crypto.KeyPair
 import pm.gnosis.crypto.utils.asEthereumAddressChecksumString
 import pm.gnosis.model.Solidity
 import pm.gnosis.svalinn.common.PreferencesManager
@@ -48,13 +46,8 @@ class NotificationRepository(
             }
         }
 
-    private var registrationUpdateFailed: Boolean
-        get() = preferencesManager.prefs.getBoolean(KEY_REGISTRATION_UPDATE_FAILED, false)
-        set(value) {
-            preferencesManager.prefs.edit {
-                putBoolean(KEY_REGISTRATION_UPDATE_FAILED, value)
-            }
-        }
+    val registered: Boolean
+        get() = deviceUuid != null
 
     suspend fun handlePushNotification(pushNotification: PushNotification) {
         val safe = safeRepository.getSafeBy(pushNotification.safe, pushNotification.chainId)
@@ -72,125 +65,102 @@ class NotificationRepository(
         notificationManager.hideAll()
     }
 
-    suspend fun register() {
-        if (deviceUuid == null || registrationUpdateFailed) {
-            kotlin.runCatching {
-                getCloudMessagingToken()
-            }
-                .onSuccess {
-                    it?.let {
-                        register(it)
+    suspend fun register(token: String? = null) {
+        val cloudMessagingToken = token ?: getCloudMessagingToken()
+        cloudMessagingToken?.let {
+            val registration = Registration(
+                uuid = deviceUuid ?: generateUUID(),
+                cloudMessagingToken = cloudMessagingToken,
+                buildNumber = BuildConfig.VERSION_CODE.toString(),
+                bundle = BuildConfig.APPLICATION_ID,
+                deviceType = "ANDROID",
+                version = appVersion,
+                timestamp = (System.currentTimeMillis() / 1000).toString()
+            )
+
+            val safesByChain = safeRepository.getSafes().groupBy { it.chainId }
+
+            if (safesByChain.isNotEmpty()) {
+
+                val owners = credentialsRepository.owners()
+                registration.addChainRegistrations(safesByChain, owners)
+
+                kotlin.runCatching {
+                    notificationService.register(registration)
+                }
+                    .onSuccess {
+                        Timber.d("notification service registration success")
+                        deviceUuid = registration.uuid
                     }
-                }
-        }
-    }
-
-    suspend fun register(token: String) {
-
-        val safes = getSafeStrings()
-
-        val registration = Registration(
-            uuid = deviceUuid ?: generateUUID(),
-            safes = safes,
-            cloudMessagingToken = token,
-            bundle = BuildConfig.APPLICATION_ID,
-            deviceType = "ANDROID",
-            version = appVersion,
-            buildNumber = BuildConfig.VERSION_CODE.toString(),
-            timestamp = (System.currentTimeMillis() / 1000).toString()
-        )
-
-        registration.addSignatures(credentialsRepository.owners())
-
-        if (safes.isNotEmpty()) {
-            kotlin.runCatching {
-                notificationService.register(registration)
+                    .onFailure {
+                        Timber.d("notification service registration failure")
+                        deviceUuid = null
+                        handleCloudMessagingTokenIsLinkedToAnotherDeviceError(it)
+                    }
             }
-                .onSuccess {
-                    Timber.d("notification service registration success")
-                    deviceUuid = it.uuid
-                    registrationUpdateFailed = false
-                }
-                .onFailure {
-                    Timber.d("notification service registration failure")
-                    deviceUuid = null
-                    handleCloudMessagingTokenIsLinkedToAnotherDeviceError(it)
-                    registrationUpdateFailed = true
-                }
         }
     }
 
     suspend fun registerSafes(notifySafe: Safe? = null) {
-
-        kotlin.runCatching {
-
-            val token = getCloudMessagingToken()!!
-            val safes = getSafeStrings()
-
+        val token = getCloudMessagingToken()
+        token?.let {
             val registration = Registration(
                 uuid = deviceUuid ?: generateUUID(),
-                safes = safes,
                 cloudMessagingToken = token,
+                buildNumber = BuildConfig.VERSION_CODE.toString(),
                 bundle = BuildConfig.APPLICATION_ID,
                 deviceType = "ANDROID",
                 version = appVersion,
-                buildNumber = BuildConfig.VERSION_CODE.toString(),
                 timestamp = (System.currentTimeMillis() / 1000).toString()
             )
 
-            registration.addSignatures(credentialsRepository.owners())
+            val safesByChain = safeRepository.getSafes().groupBy { it.chainId }
+            val owners = credentialsRepository.owners()
+            registration.addChainRegistrations(safesByChain, owners)
 
-            notificationService.register(registration)
-        }
-            .onSuccess {
-                deviceUuid = it.uuid
-                notifySafe?.let {
-                    notificationManager.updateNotificationChannelGroupForSafe(notifySafe)
+            kotlin.runCatching {
+                notificationService.register(registration)
+            }
+                .onSuccess {
+                    deviceUuid = registration.uuid
+                    notifySafe?.let {
+                        notificationManager.updateNotificationChannelGroupForSafe(notifySafe)
+                    }
                 }
-                registrationUpdateFailed = false
-            }
-            .onFailure {
-                registrationUpdateFailed = true
-                handleCloudMessagingTokenIsLinkedToAnotherDeviceError(it)
-            }
+                .onFailure {
+                    handleCloudMessagingTokenIsLinkedToAnotherDeviceError(it)
+                }
+        }
     }
 
     suspend fun unregisterOwners() {
-
-        kotlin.runCatching {
-
-            val token = getCloudMessagingToken()!!
-            val safes = getSafeStrings()
-
+        val token = getCloudMessagingToken()
+        token?.let {
             val registration = Registration(
                 uuid = deviceUuid ?: generateUUID(),
-                // safes are always added and never removed on the registration request
-                safes = safes,
                 cloudMessagingToken = token,
+                buildNumber = BuildConfig.VERSION_CODE.toString(),
                 bundle = BuildConfig.APPLICATION_ID,
                 deviceType = "ANDROID",
                 version = appVersion,
-                buildNumber = BuildConfig.VERSION_CODE.toString(),
                 timestamp = (System.currentTimeMillis() / 1000).toString()
             )
 
-            registration.addSignatures(credentialsRepository.owners())
+            val safesByChain = safeRepository.getSafes().groupBy { it.chainId }
+            val owners = credentialsRepository.owners()
+            registration.addChainRegistrations(safesByChain, owners)
 
-            // owners whose signature is missing will be unregistered
-            notificationService.register(registration)
+            kotlin.runCatching {
+                // owners whose signature is missing will be unregistered
+                notificationService.register(registration)
+            }
+                .onSuccess {
+                    deviceUuid = registration.uuid
+                }
+                .onFailure {
+                    handleCloudMessagingTokenIsLinkedToAnotherDeviceError(it)
+                }
         }
-            .onSuccess {
-                deviceUuid = it.uuid
-                registrationUpdateFailed = false
-            }
-            .onFailure {
-                registrationUpdateFailed = true
-                handleCloudMessagingTokenIsLinkedToAnotherDeviceError(it)
-            }
-    }
-
-    private suspend fun getSafeStrings() = safeRepository.getSafes().sortedBy { it.address.value }.map {
-        it.address.asEthereumAddressChecksumString()
     }
 
     private suspend fun handleCloudMessagingTokenIsLinkedToAnotherDeviceError(throwable: Throwable) {
@@ -211,20 +181,11 @@ class NotificationRepository(
         }
     }
 
-    suspend fun unregister() {
-        kotlin.runCatching {
-            deviceUuid?.let {
-                notificationService.unregister(it)
-            }
-        }
-    }
-
     suspend fun unregisterSafe(chainId: BigInteger, safeAddress: Solidity.Address) {
         // no need to update safe meta because on safe removal safe meta entry will be also deleted
         kotlin.runCatching {
             deviceUuid?.let {
-                //TODO: use new unregistration format
-                notificationService.unregisterSafe(it, safeAddress.asEthereumAddressChecksumString())
+                notificationService.unregisterSafe(it, chainId, safeAddress.asEthereumAddressChecksumString())
             }
         }
     }
@@ -249,9 +210,24 @@ class NotificationRepository(
         return deviceUuid!!
     }
 
-    private fun Registration.addSignatures(owners: List<Owner>) {
+    private fun Registration.addChainRegistrations(safesByChain: Map<BigInteger, List<Safe>>, owners: List<Owner>) {
+        safesByChain.keys.forEach {
+            val safesForChain = safesByChain[it]!!.sortedBy { it.address.value }.map {
+                it.address.asEthereumAddressChecksumString()
+            }
+            val chainRegistrationData = Registration.ChainData(
+                it.toString(),
+                safesForChain
+            )
+            val hashForChain = hashForSafes(safesForChain)
+            chainRegistrationData.addSignatures(hashForChain, owners)
+            addRegistrationData(chainRegistrationData)
+        }
+    }
+
+    private fun Registration.ChainData.addSignatures(registrationHashForChain: String, owners: List<Owner>) {
         if (owners.isNotEmpty()) {
-            val registrationHash = hash().hexToByteArray()
+            val registrationHash = registrationHashForChain.hexToByteArray()
             owners.forEach {
                 try {
                     val signature = credentialsRepository.signWithOwner(it, registrationHash).addHexPrefix()
@@ -265,16 +241,5 @@ class NotificationRepository(
 
     companion object {
         private const val KEY_DEVICE_UUID = "prefs.string.device_uuid"
-        private const val KEY_REGISTRATION_UPDATE_FAILED = "prefs.boolean.registration_update_failed"
     }
-}
-
-fun Registration.buildAndAddSignature(key: ByteArray) {
-    val signature =
-        KeyPair
-            .fromPrivate(key)
-            .sign(hash().hexToByteArray())
-            .toSignatureString()
-            .addHexPrefix()
-    addSignature(signature)
 }

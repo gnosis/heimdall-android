@@ -32,7 +32,8 @@ constructor(
 
     suspend fun onAppStart() {
 
-        notificationRepository.register()
+        workRepository.registerForPushNotifications()
+        workRepository.updateChainInfo()
 
         notificationRepository.clearNotifications()
         val pushEnabled = notificationRepository.checkPermissions()
@@ -42,8 +43,6 @@ constructor(
         tracker.setNumSafes(numSafes)
         tracker.setNumKeysImported(credentialsRepository.ownerCount(Owner.Type.IMPORTED))
         tracker.setNumKeysGenerated(credentialsRepository.ownerCount(Owner.Type.GENERATED))
-
-        workRepository.updateChainInfo()
     }
 
     fun onStartClicked() {
